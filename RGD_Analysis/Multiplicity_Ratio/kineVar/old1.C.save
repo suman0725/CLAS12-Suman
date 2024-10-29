@@ -1,0 +1,85 @@
+#include <cstdlib>
+#include <iostream>
+#include <chrono>
+#include <TFile.h>
+#include <TTree.h>
+#include <TApplication.h>
+#include <TROOT.h>
+#include <TDatabasePDG.h>
+#include <TLorentzVector.h>
+#include <TH1.h>
+#include <TH2.h>
+#include <TChain.h>
+#include <TCanvas.h>
+#include <TBenchmark.h>
+#include "clas12reader.h"
+#include "HipoChain.h"
+
+using namespace clas12;
+
+void SetLorentzVector(TLorentzVector &p4, clas12::region_part_ptr rp) {
+    p4.SetXYZM(rp->par()->getPx(), rp->par()->getPy(), rp->par()->getPz(), p4.M());
+}
+
+void old1() {
+    auto db = TDatabasePDG::Instance();
+    double beamEnergy = 10.532; // GeV
+    TLorentzVector beam(0, 0, beamEnergy, beamEnergy); // Assuming the beam is along the z-axis
+    TLorentzVector target(0, 0, 0, db->GetParticle(2212)->Mass()); // Proton target
+    TLorentzVector el;
+    auto* hnu = new TH1F("h_nu", "LD2_nu;nu(GeV);Counts", 200, 1, 10); 
+    auto* hQ2 = new TH1F("Q2", "Q^{2} distribution;Q^{2} (GeV)^{2};Counts", 200, 0, 10);
+    auto* hxB = new TH1F("xB", "Bjorken x distribution;xB;Counts", 100, 0, 1);
+    auto* hW2 = new TH1F("W2", "W^{2} distribution;W^{2} (GeV)^{2};Counts", 200, 0, 20); // Histogram for W^2
+
+    clas12root::HipoChain chain;
+    // Add your HIPo files
+    chain.Add("/lustre24/expphy/cache/hallb/scratch/rg-d/production/Bspot/v5dstLD2/dst/recon/018309/rec_clas_018309.evio.00035-00039.hipo");
+    //chain.Add("/lustre19/expphy/cache/hallb/scratch/rg-d/production/prod/v4ob_aideLD2/dst/recon/018528/rec_clas_018529.evio.*.hipo");
+    chain.db()->turnOffQADB();
+
+    auto& c12 = chain.C12ref();
+    while (chain.Next()) {
+        auto particles = c12->getDetParticles(); 
+        TLorentzVector el; 
+
+        for (auto& p : particles) {
+	   SetLorentzVector(el, p); 
+            int pid = p->par()->getPid(); 
+            int status = p->par()->getStatus(); 
+            int chi2Pid = p->par()->getChi2Pid(); 
+            if (pid == 11 && status < 0 && chi2Pid < 5 && chi2Pid > -5) { 
+                double nu = beam.Energy() - el.Energy(); 
+                TLorentzVector q = beam - el;
+                double Q2 = -q.Mag2(); 
+                double W2 = target.M() * target.M() - Q2 + 2 * target.M() * nu; // Declare W2
+                double xB = Q2 / (2 * target.M() * nu); // Declare xB
+
+                hnu->Fill(nu); 
+                hQ2->Fill(Q2);
+                hxB->Fill(xB);
+                hW2->Fill(W2);
+            }
+
+	    if(pid == 211) {
+	x	
+ 	    } 
+        }
+    }
+
+    TCanvas* can1 = new TCanvas();
+    hnu->Draw();
+    can1->Print("Kinematica_Variables_LD2_018309.pdf(", "pdf");
+
+    TCanvas* can2 = new TCanvas();
+    hQ2->Draw();
+    can2->Print("Kinematica_Variables_LD2_018309.pdf(", "pdf");
+
+    TCanvas* can3 = new TCanvas();
+    hxB->Draw();
+    can3->Print("Kinematica_Variables_LD2_018309.pdf(", "pdf");
+
+    TCanvas* can4 = new TCanvas();
+    hW2->Draw();
+    can4->Print("Kinematica_Variables_LD2_018309.pdf(", "pdf");
+}
